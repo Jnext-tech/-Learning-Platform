@@ -20,38 +20,86 @@ export default function VoiceChat({ socketRef, roomId, participants, currentUser
   const localStreamRef = useRef(null);
   const peersRef = useRef(new Map()); // socketId -> RTCPeerConnection
   const audioElsRef = useRef(new Map()); // socketId -> HTMLAudioElement
+  const pendingCandidatesRef = useRef(new Map());
 
   useEffect(() => {
+    
     const socket = socketRef.current;
     if (!socket) return undefined;
 
-    const handleSignal = async ({ from, description, candidate }) => {
-      const pc = peersRef.current.get(from);
-      if (!pc) return;
-      if (description) {
-        await pc.setRemoteDescription(description);
-        if (description.type === "offer") {
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-          socket.emit("voice:signal", { to: from, description: pc.localDescription });
-        }
-      } else if (candidate) {
-        try {
-          await pc.addIceCandidate(candidate);
-        } catch {
-          // ignore late/duplicate candidates
-        }
-      }
-    };
+const handleSignal = async ({ from, description, candidate }) => {
+  let pc = peersRef.current.get(from);
+
+  if (!pc) {
+    pc = createPeerConnection(from);
+
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach((track) => {
+        pc.addTrack(track, localStreamRef.current);
+      });
+    }
+  }
+
+  if (description) {
+    await pc.setRemoteDescription(description);
+
+    // Add candidates that arrived before the remote description
+    const pending = pendingCandidatesRef.current.get(from) || [];
+
+    for (const c of pending) {
+      await pc.addIceCandidate(c);
+    }
+
+    pendingCandidatesRef.current.delete(from);
+
+    if (description.type === "offer") {
+      const answer = await pc.createAnswer();
+
+      await pc.setLocalDescription(answer);
+
+      socketRef.current.emit("voice:signal", {
+        to: from,
+        description: pc.localDescription,
+      });
+    }
+  }
+
+  if (candidate) {
+    if (pc.remoteDescription) {
+      await pc.addIceCandidate(candidate);
+    } else {
+      const pending = pendingCandidatesRef.current.get(from) || [];
+
+      pending.push(candidate);
+
+      pendingCandidatesRef.current.set(from, pending);
+    }
+  }
+};
 
     const handlePeerJoined = async ({ socketId }) => {
-      if (!inVoice || !localStreamRef.current) return;
-      const pc = createPeerConnection(socketId);
-      localStreamRef.current.getTracks().forEach((t) => pc.addTrack(t, localStreamRef.current));
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      socket.emit("voice:signal", { to: socketId, description: pc.localDescription });
-    };
+
+  if (!inVoice || !localStreamRef.current) {
+    return;
+  }
+
+  const pc = createPeerConnection(socketId);
+
+  localStreamRef.current.getTracks().forEach((track) => {
+    pc.addTrack(track, localStreamRef.current);
+  });
+
+  const offer = await pc.createOffer();
+
+
+  await pc.setLocalDescription(offer);
+
+
+  socket.emit("voice:signal", {
+    to: socketId,
+    description: pc.localDescription,
+  });
+};
 
     const handlePeerLeft = ({ socketId }) => {
       const pc = peersRef.current.get(socketId);
@@ -79,52 +127,77 @@ export default function VoiceChat({ socketRef, roomId, participants, currentUser
   }, [inVoice]);
 
   function createPeerConnection(socketId) {
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
 
-    pc.onicecandidate = (e) => {
-      if (e.candidate) {
-        socketRef.current.emit("voice:signal", { to: socketId, candidate: e.candidate });
-      }
-    };
+  const pc = new RTCPeerConnection({
+    iceServers: ICE_SERVERS,
+  });
 
-    pc.ontrack = (e) => {
-      let audioEl = audioElsRef.current.get(socketId);
-      if (!audioEl) {
-        audioEl = document.createElement("audio");
-        audioEl.autoplay = true;
-        document.body.appendChild(audioEl);
-        audioElsRef.current.set(socketId, audioEl);
-      }
-      audioEl.srcObject = e.streams[0];
-    };
+  pc.onicecandidate = (e) => {
+    if (e.candidate) {
 
-    peersRef.current.set(socketId, pc);
-    return pc;
-  }
-
-  const joinVoice = async () => {
-    setError("");
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getAudioTracks().forEach((t) => (t.enabled = false)); // start muted
-      localStreamRef.current = stream;
-      setMuted(true);
-      setInVoice(true);
-      socketRef.current.emit("voice:join", { roomId });
-
-      // Connect to everyone already in voice.
-      const existing = participants.filter((p) => p.inVoice && p.userId !== currentUserId);
-      for (const peer of existing) {
-        const pc = createPeerConnection(peer.socketId);
-        stream.getTracks().forEach((t) => pc.addTrack(t, stream));
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        socketRef.current.emit("voice:signal", { to: peer.socketId, description: pc.localDescription });
-      }
-    } catch (err) {
-      setError("Microphone access denied or unavailable.");
+      socketRef.current.emit("voice:signal", {
+        to: socketId,
+        candidate: e.candidate,
+      });
     }
   };
+
+  pc.ontrack = (e) => {
+
+    let audioEl = audioElsRef.current.get(socketId);
+
+    if (!audioEl) {
+      audioEl = document.createElement("audio");
+      audioEl.autoplay = true;
+      document.body.appendChild(audioEl);
+      audioElsRef.current.set(socketId, audioEl);
+    }
+
+    audioEl.srcObject = e.streams[0];
+  };
+
+  peersRef.current.set(socketId, pc);
+
+  return pc;
+}
+
+  const joinVoice = async () => {
+  setError("");
+
+  try {
+    console.log("1. JOIN VOICE CLICKED");
+    console.log("2. socket:", socketRef.current);
+
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: true,
+    });
+
+    console.log("3. MICROPHONE OK", stream);
+
+    // Start muted
+    stream.getAudioTracks().forEach((track) => {
+      track.enabled = false;
+    });
+
+    localStreamRef.current = stream;
+
+    setMuted(true);
+    setInVoice(true);
+
+    console.log("4. EMITTING voice:join");
+
+    socketRef.current.emit("voice:join", { roomId });
+
+    console.log("5. voice:join SENT");
+
+  } catch (err) {
+    console.error("VOICE ERROR:", err);
+
+    setError(
+      `Microphone access denied or unavailable: ${err.message}`
+    );
+  }
+};
 
   const leaveVoice = () => {
     localStreamRef.current?.getTracks().forEach((t) => t.stop());

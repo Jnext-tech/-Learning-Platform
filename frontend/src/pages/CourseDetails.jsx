@@ -2,182 +2,28 @@ import { useEffect, useState } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import api from "../services/api.js";
 import { useAuth } from "../hooks/useAuth.js";
+import LoadingSpinner from "../components/LoadingSpinner.jsx";
+
+function BookIcon() { return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6C8.7 3.8 5.6 4.2 3 5.5v13c2.6-1.3 5.7-1.7 9 1 3.3-2.7 6.4-2.3 9-1v-13C18.4 4.2 15.3 3.8 12 6Z" /><path d="M12 6v13" /></svg>; }
+function ClockIcon() { return <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" /><path d="M12 7v5l3.5 2" /></svg>; }
+function formatDate(date) { return date ? new Date(`${date}T00:00:00`).toLocaleDateString("ar-SA", { year: "numeric", month: "long", day: "numeric" }) : "يُحدد لاحقاً"; }
 
 export default function CourseDetails() {
-  const { id } = useParams();
-  const { profile } = useAuth();
-  const navigate = useNavigate();
-
-  const [course, setCourse] = useState(null);
-  const [rooms, setRooms] = useState([]);
-  const [students, setStudents] = useState([]);
-  const [error, setError] = useState("");
-  const [showRoomForm, setShowRoomForm] = useState(false);
-  const [roomForm, setRoomForm] = useState({
-    name: "",
-    description: "",
-    startDate: "",
-    startTime: "",
-    endTime: "",
-  });
-
+  const { id } = useParams(); const { profile } = useAuth(); const navigate = useNavigate();
+  const [course, setCourse] = useState(null); const [rooms, setRooms] = useState([]); const [students, setStudents] = useState([]); const [error, setError] = useState("");
+  const [showRoomForm, setShowRoomForm] = useState(false); const [roomForm, setRoomForm] = useState({ name: "", description: "", startDate: "", startTime: "", endTime: "" });
   const canManage = profile?.role === "manager" || (profile?.role === "teacher" && course?.teacher_id === profile.id);
+  const load = async () => { try { const { data } = await api.get(`/courses/${id}`); setCourse(data.course); const roomsRes = await api.get(`/rooms?courseId=${id}`); setRooms(roomsRes.data.rooms); if (profile?.role !== "student") { try { const studentsRes = await api.get(`/courses/${id}/students`); setStudents(studentsRes.data.students); } catch { /* authorization handled by the API */ } } } catch (err) { setError(err.message); } };
+  useEffect(() => { load(); }, [id]);
+  const handleCreateRoom = async (e) => { e.preventDefault(); setError(""); try { await api.post("/rooms", { courseId: id, ...roomForm }); setShowRoomForm(false); setRoomForm({ name: "", description: "", startDate: "", startTime: "", endTime: "" }); await load(); } catch (err) { setError(err.message); } };
+  if (!course) return error ? <div className="page"><p className="error-text">{error}</p></div> : <div className="app-loading"><LoadingSpinner label="جارٍ تحميل تفاصيل الدورة..." /></div>;
 
-  const load = async () => {
-    try {
-      const { data } = await api.get(`/courses/${id}`);
-      setCourse(data.course);
-      const roomsRes = await api.get(`/rooms?courseId=${id}`);
-      setRooms(roomsRes.data.rooms);
-      if (profile?.role !== "student") {
-        try {
-          const studentsRes = await api.get(`/courses/${id}/students`);
-          setStudents(studentsRes.data.students);
-        } catch {
-          // not authorized (e.g. teacher viewing another teacher's course won't reach here anyway)
-        }
-      }
-    } catch (err) {
-      setError(err.message);
-    }
-  };
+  if (profile?.role === "student") return <div className="student-course-details" dir="rtl">
+    <Link className="course-details-back" to="/courses">← العودة إلى الدورات</Link>
+    <section className="course-details-hero"><div className="course-details-hero__icon"><BookIcon /></div><div><span className="course-details-eyebrow">الدورة التدريبية</span><h1>{course.name}</h1><p>{course.description || "رحلة تعليمية منظمة تساعدك على التقدم بثبات."}</p></div><span className="course-details-status">{course.status?.toLowerCase() === "inactive" ? "غير نشطة" : "نشطة"}</span></section>
+    <section className="course-details-meta"><div><span>المعلمة</span><strong>{course.teacher?.full_name || "غير محددة"}</strong></div><div><span>عدد الغرف</span><strong>{rooms.length} جلسات</strong></div><div><span>حالة التسجيل</span><strong>مسجل في الدورة</strong></div></section>
+    <section className="course-sessions"><header><div><h2>الغرف والجلسات</h2><p>اختر الجلسة للدخول إلى الغرفة في موعدها.</p></div><span>{rooms.length} جلسات</span></header><div className="course-session-list">{rooms.map((room) => <Link to={`/rooms/${room.id}`} className="course-session" key={room.id}><span className="course-session__date">{formatDate(room.start_date)}</span><div><strong>{room.name}</strong><p>{room.description || "جلسة تدريبية ضمن هذه الدورة"}</p></div><span className="course-session__time"><ClockIcon /> {room.start_time || "—"} – {room.end_time || "—"}</span><span className="course-session__arrow">←</span></Link>)}</div>{!rooms.length && <div className="student-empty-state"><BookIcon /><p>لا توجد جلسات مجدولة لهذه الدورة حالياً.</p></div>}</section>
+  </div>;
 
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
-
-  const handleCreateRoom = async (e) => {
-    e.preventDefault();
-    setError("");
-    try {
-      await api.post("/rooms", { courseId: id, ...roomForm });
-      setShowRoomForm(false);
-      setRoomForm({ name: "", description: "", startDate: "", startTime: "", endTime: "" });
-      await load();
-    } catch (err) {
-      setError(err.message);
-    }
-  };
-
-  if (!course) return <div className="page">{error || "Loading..."}</div>;
-
-  return (
-    <div className="page">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div>
-          <h2 style={{ marginBottom: "0.25rem" }}>{course.name}</h2>
-          <p style={{ color: "var(--text-muted)" }}>{course.description}</p>
-          <p style={{ fontSize: "0.9rem" }}>Teacher: {course.teacher?.full_name}</p>
-        </div>
-        {canManage && (
-          <button className="btn-secondary" onClick={() => navigate(`/courses/${id}/edit`)}>
-            Edit course
-          </button>
-        )}
-      </div>
-
-      <div className="grid grid-2" style={{ marginTop: "1.5rem" }}>
-        <div className="card">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <h3 style={{ margin: 0 }}>Rooms</h3>
-            {canManage && (
-              <button className="btn-primary" onClick={() => setShowRoomForm((s) => !s)}>
-                {showRoomForm ? "Cancel" : "+ Create room"}
-              </button>
-            )}
-          </div>
-
-          {showRoomForm && (
-            <form onSubmit={handleCreateRoom} style={{ marginTop: "1rem" }}>
-              <div className="form-group">
-                <label>Room name</label>
-                <input
-                  required
-                  value={roomForm.name}
-                  onChange={(e) => setRoomForm({ ...roomForm, name: e.target.value })}
-                />
-              </div>
-              <div className="form-group">
-                <label>Description</label>
-                <input
-                  value={roomForm.description}
-                  onChange={(e) => setRoomForm({ ...roomForm, description: e.target.value })}
-                />
-              </div>
-              <div className="grid grid-3">
-                <div className="form-group">
-                  <label>Date</label>
-                  <input
-                    type="date"
-                    required
-                    value={roomForm.startDate}
-                    onChange={(e) => setRoomForm({ ...roomForm, startDate: e.target.value })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Start</label>
-                  <input
-                    type="time"
-                    required
-                    value={roomForm.startTime}
-                    onChange={(e) => setRoomForm({ ...roomForm, startTime: e.target.value })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label>End</label>
-                  <input
-                    type="time"
-                    required
-                    value={roomForm.endTime}
-                    onChange={(e) => setRoomForm({ ...roomForm, endTime: e.target.value })}
-                  />
-                </div>
-              </div>
-              <button className="btn-primary" type="submit">
-                Create room
-              </button>
-            </form>
-          )}
-
-          <ul style={{ listStyle: "none", padding: 0, marginTop: "1rem" }}>
-            {rooms.map((room) => (
-              <li key={room.id} style={{ padding: "0.6rem 0", borderBottom: "1px solid var(--border)" }}>
-                <Link to={`/rooms/${room.id}`}>{room.name}</Link>
-                <div style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
-                  {room.start_date} · {room.start_time}–{room.end_time}{" "}
-                  <span className="badge badge-status">{room.status}</span>
-                </div>
-              </li>
-            ))}
-            {rooms.length === 0 && <p style={{ color: "var(--text-muted)" }}>No rooms yet.</p>}
-          </ul>
-        </div>
-
-        {profile?.role !== "student" && (
-          <div className="card">
-            <h3 style={{ marginTop: 0 }}>Registered students ({students.length})</h3>
-            <table>
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Email</th>
-                </tr>
-              </thead>
-              <tbody>
-                {students.map((s) => (
-                  <tr key={s.id}>
-                    <td>{s.student?.full_name}</td>
-                    <td>{s.student?.email}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {students.length === 0 && <p style={{ color: "var(--text-muted)" }}>No students yet.</p>}
-          </div>
-        )}
-      </div>
-      {error && <p className="error-text">{error}</p>}
-    </div>
-  );
+  return <div className="page"><div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}><div><h2 style={{ marginBottom: "0.25rem" }}>{course.name}</h2><p style={{ color: "var(--text-muted)" }}>{course.description}</p><p style={{ fontSize: "0.9rem" }}>Teacher: {course.teacher?.full_name}</p></div>{canManage && <button className="btn-secondary" onClick={() => navigate(`/courses/${id}/edit`)}>Edit course</button>}</div><div className="grid grid-2" style={{ marginTop: "1.5rem" }}><div className="card"><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><h3 style={{ margin: 0 }}>Rooms</h3>{canManage && <button className="btn-primary" onClick={() => setShowRoomForm((s) => !s)}>{showRoomForm ? "Cancel" : "+ Create room"}</button>}</div>{showRoomForm && <form onSubmit={handleCreateRoom} style={{ marginTop: "1rem" }}><div className="form-group"><label>Room name</label><input required value={roomForm.name} onChange={(e) => setRoomForm({ ...roomForm, name: e.target.value })} /></div><div className="form-group"><label>Description</label><input value={roomForm.description} onChange={(e) => setRoomForm({ ...roomForm, description: e.target.value })} /></div><div className="grid grid-3"><div className="form-group"><label>Date</label><input type="date" required value={roomForm.startDate} onChange={(e) => setRoomForm({ ...roomForm, startDate: e.target.value })} /></div><div className="form-group"><label>Start</label><input type="time" required value={roomForm.startTime} onChange={(e) => setRoomForm({ ...roomForm, startTime: e.target.value })} /></div><div className="form-group"><label>End</label><input type="time" required value={roomForm.endTime} onChange={(e) => setRoomForm({ ...roomForm, endTime: e.target.value })} /></div></div><button className="btn-primary" type="submit">Create room</button></form>}<ul style={{ listStyle: "none", padding: 0, marginTop: "1rem" }}>{rooms.map((room) => <li key={room.id} style={{ padding: "0.6rem 0", borderBottom: "1px solid var(--border)" }}><Link to={`/rooms/${room.id}`}>{room.name}</Link><div style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>{room.start_date} · {room.start_time}–{room.end_time} <span className="badge badge-status">{room.status}</span></div></li>)}{!rooms.length && <p style={{ color: "var(--text-muted)" }}>No rooms yet.</p>}</ul></div>{profile?.role !== "student" && <div className="card"><h3 style={{ marginTop: 0 }}>Registered students ({students.length})</h3><table><thead><tr><th>Name</th><th>Email</th></tr></thead><tbody>{students.map((s) => <tr key={s.id}><td>{s.student?.full_name}</td><td>{s.student?.email}</td></tr>)}</tbody></table>{!students.length && <p style={{ color: "var(--text-muted)" }}>No students yet.</p>}</div>}</div>{error && <p className="error-text">{error}</p>}</div>;
 }

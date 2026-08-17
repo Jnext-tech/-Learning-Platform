@@ -1,5 +1,6 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth.js";
+import LoadingSpinner from "../components/LoadingSpinner.jsx";
 
 /**
  * Frontend route guards are a UX convenience only — the real authorization
@@ -9,7 +10,7 @@ import { useAuth } from "../hooks/useAuth.js";
 export default function ProtectedRoute({ roles, children }) {
   const { session, profile, loading } = useAuth();
 
-  if (loading) return <div className="page">Loading...</div>;
+  if (loading) return <div className="app-loading"><LoadingSpinner label="جارٍ تحميل المنصة..." /></div>;
   if (!session) return <Navigate to="/login" replace />;
   if (roles && profile && !roles.includes(profile.role)) {
     return <Navigate to="/" replace />;

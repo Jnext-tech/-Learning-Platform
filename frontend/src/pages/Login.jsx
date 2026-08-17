@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth.js";
+import quranLogo from "../assets/logo.png";
 
 export default function Login() {
   const { login } = useAuth();
@@ -25,35 +26,39 @@ export default function Login() {
   };
 
   return (
-    <div className="page" style={{ maxWidth: 420 }}>
-      <div className="card">
-        <h2>Welcome back</h2>
+    <main className="auth-page" dir="rtl">
+      <section className="auth-card" aria-labelledby="login-title">
+        <div className="auth-brand">
+          <img src={quranLogo} alt="شعار منصة الفرقان" />
+          <div className="auth-rule" />
+        </div>
+        <h1 id="login-title" className="sr-only">تسجيل الدخول</h1>
         <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label>Email</label>
-            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+          <div className="auth-field">
+            <label className="sr-only" htmlFor="login-email">البريد الإلكتروني</label>
+            <input id="login-email" type="email" required placeholder="ادخل البريد الإلكتروني" value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
-          <div className="form-group">
-            <label>Password</label>
+          <div className="auth-field">
+            <label className="sr-only" htmlFor="login-password">كلمة المرور</label>
             <input
+              id="login-password"
               type="password"
               required
+              placeholder="ادخل كلمة المرور"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
           </div>
           {error && <p className="error-text">{error}</p>}
-          <button className="btn-primary" type="submit" disabled={busy} style={{ width: "100%" }}>
-            {busy ? "Signing in..." : "Sign in"}
+          <button className="auth-submit" type="submit" disabled={busy}>
+            {busy ? "جارٍ تسجيل الدخول..." : "تسجيل الدخول"}
           </button>
         </form>
-        <p style={{ marginTop: "1rem", fontSize: "0.9rem" }}>
-          No account? <Link to="/register">Register</Link>
-        </p>
-        <p style={{ fontSize: "0.85rem" }}>
-          <Link to="/forgot-password">Forgot your password?</Link>
-        </p>
-      </div>
-    </div>
+        <nav className="auth-links" aria-label="روابط الحساب">
+          <Link to="/forgot-password">نسيت كلمة السر</Link>
+          <Link to="/register">إنشاء حساب</Link>
+        </nav>
+      </section>
+    </main>
   );
 }

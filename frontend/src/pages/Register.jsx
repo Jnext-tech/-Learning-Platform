@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth.js";
+import quranLogo from "../assets/logo.png";
 
 export default function Register() {
   const { register } = useAuth();
@@ -26,40 +27,41 @@ export default function Register() {
   };
 
   return (
-    <div className="page" style={{ maxWidth: 420 }}>
-      <div className="card">
-        <h2>Create your account</h2>
-        <p style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>
-          New accounts are created as Students. A Manager can promote you to Teacher later.
-        </p>
+    <main className="auth-page" dir="rtl">
+      <section className="auth-card auth-card--register" aria-labelledby="register-title">
+        <div className="auth-brand">
+          <img src={quranLogo} alt="شعار منصة الفرقان" />
+          <div className="auth-rule" />
+        </div>
+        <h1 id="register-title" className="sr-only">إنشاء حساب</h1>
         <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label>Full name</label>
-            <input required value={fullName} onChange={(e) => setFullName(e.target.value)} />
+          <div className="auth-field">
+            <label className="sr-only" htmlFor="register-name">الاسم الكامل</label>
+            <input id="register-name" required placeholder="ادخل الاسم الكامل" value={fullName} onChange={(e) => setFullName(e.target.value)} />
           </div>
-          <div className="form-group">
-            <label>Email</label>
-            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+          <div className="auth-field">
+            <label className="sr-only" htmlFor="register-email">البريد الإلكتروني</label>
+            <input id="register-email" type="email" required placeholder="ادخل البريد الإلكتروني" value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
-          <div className="form-group">
-            <label>Password</label>
+          <div className="auth-field">
+            <label className="sr-only" htmlFor="register-password">كلمة المرور</label>
             <input
+              id="register-password"
               type="password"
               required
               minLength={6}
+              placeholder="ادخل كلمة المرور"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
           </div>
           {error && <p className="error-text">{error}</p>}
-          <button className="btn-primary" type="submit" disabled={busy} style={{ width: "100%" }}>
-            {busy ? "Creating account..." : "Create account"}
+          <button className="auth-submit" type="submit" disabled={busy}>
+            {busy ? "جارٍ إنشاء الحساب..." : "إنشاء حساب"}
           </button>
         </form>
-        <p style={{ marginTop: "1rem", fontSize: "0.9rem" }}>
-          Already have an account? <Link to="/login">Sign in</Link>
-        </p>
-      </div>
-    </div>
+        <p className="auth-login-prompt">لديك حساب بالفعل؟ <Link to="/login">تسجيل الدخول</Link></p>
+      </section>
+    </main>
   );
 }

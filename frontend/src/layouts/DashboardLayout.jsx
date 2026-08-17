@@ -1,5 +1,6 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth.js";
+import quranLogo from "../assets/logo.png";
 
 export default function DashboardLayout() {
   const { profile, logout } = useAuth();
@@ -10,6 +11,21 @@ export default function DashboardLayout() {
     teacher: "/teacher",
     student: "/student",
   };
+
+  if (profile?.role === "student") {
+    return (
+      <div className="student-shell" dir="rtl">
+        <header className="student-header">
+          <NavLink className="student-header__brand" to="/student"><img src={quranLogo} alt="شعار الفرقان" /><span><strong>الفرقان</strong><small>مركز الفرقان لتحفيظ القرآن الكريم</small></span></NavLink>
+          <nav aria-label="التنقل الرئيسي">
+            <NavLink to="/student">الصفحة الرئيسية</NavLink><NavLink to="/profile">الملف الشخصي</NavLink><NavLink to="/courses">الدورات التدريبية</NavLink><NavLink to="/attendance">سجل الحضور</NavLink>
+          </nav>
+          <button className="student-header__logout" onClick={async () => { await logout(); navigate("/login"); }}>تسجيل الخروج</button>
+        </header>
+        <main><Outlet /></main>
+      </div>
+    );
+  }
 
   return (
     <div>
